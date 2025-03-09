@@ -27,6 +27,7 @@ import java.security.SignatureException;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.prefs.Preferences;
 
 import static com.flower.crypt.keys.UserPreferencesManager.getUserPreference;
@@ -41,14 +42,13 @@ public class RsaRawKeyProvider extends AnchorPane implements TabKeyProvider, Rsa
     @FXML @Nullable TextArea rawCertificateTextArea;
     @FXML @Nullable TextArea rawPrivateKeyTextArea;
 
-    //TODO: access intentionally not safe
-    @Nullable RawKeyContext currentContext = null;
-    static final class RawKeyContext {
+    final AtomicReference<RawKeyManager> currentKeyManager = new AtomicReference<>(null);
+    static final class RawKeyManager {
         final String certificateStr;
         final String keyStr;
         final KeyManagerFactory keyManagerFactory;
 
-        RawKeyContext(String certificateStr, String keyStr, KeyManagerFactory keyManagerFactory) {
+        RawKeyManager(String certificateStr, String keyStr, KeyManagerFactory keyManagerFactory) {
             this.certificateStr = certificateStr;
             this.keyStr = keyStr;
             this.keyManagerFactory = keyManagerFactory;
@@ -114,14 +114,19 @@ public class RsaRawKeyProvider extends AnchorPane implements TabKeyProvider, Rsa
             String certificateStr = checkNotNull(rawCertificateTextArea).textProperty().get();
             String keyStr = checkNotNull(rawPrivateKeyTextArea).textProperty().get();
 
-            if (currentContext != null && currentContext.sameContext(certificateStr, keyStr)) {
-                return currentContext.keyManagerFactory;
-            } else {
-                X509Certificate certificate = PkiUtil.getCertificateFromString(certificateStr);
-                PrivateKey key = PkiUtil.getPrivateKeyFromString(keyStr);
-                KeyManagerFactory keyManagerFactory = PkiUtil.getKeyManagerFromCertAndPrivateKey(certificate, key);
-                currentContext = new RawKeyContext(certificateStr, keyStr, keyManagerFactory);
-                return keyManagerFactory;
+            while (true) {
+                RawKeyManager keyManager = currentKeyManager.get();
+                if (keyManager != null && keyManager.sameContext(certificateStr, keyStr)) {
+                    return keyManager.keyManagerFactory;
+                } else {
+                    X509Certificate certificate = PkiUtil.getCertificateFromString(certificateStr);
+                    PrivateKey key = PkiUtil.getPrivateKeyFromString(keyStr);
+                    KeyManagerFactory keyManagerFactory = PkiUtil.getKeyManagerFromCertAndPrivateKey(certificate, key);
+                    RawKeyManager newKeyManager = new RawKeyManager(certificateStr, keyStr, keyManagerFactory);
+                    if (currentKeyManager.compareAndSet(keyManager, newKeyManager)) {
+                        return keyManagerFactory;
+                    }
+                }
             }
         } catch (Exception e) {
             throw new RuntimeException(e);

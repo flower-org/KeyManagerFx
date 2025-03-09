@@ -31,6 +31,7 @@ import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.prefs.Preferences;
 
 import static com.flower.crypt.keys.UserPreferencesManager.getUserPreference;
@@ -52,13 +53,12 @@ public class RsaPkcs11KeyProvider extends AnchorPane implements TabKeyProvider, 
     @Nullable KeyStore pkcs11KeyStore;
     protected final Stage mainStage;
 
-    //TODO: access intentionally not safe
-    @Nullable Pkcs11KeyContext currentContext = null;
-    static final class Pkcs11KeyContext {
+    final AtomicReference<Pkcs11KeyManager> currentKeyManager = new AtomicReference<>(null);
+    static final class Pkcs11KeyManager {
         final KeyStore pkcs11KeyStore;
         final KeyManagerFactory keyManagerFactory;
 
-        Pkcs11KeyContext(KeyStore pkcs11KeyStore, KeyManagerFactory keyManagerFactory) {
+        Pkcs11KeyManager(KeyStore pkcs11KeyStore, KeyManagerFactory keyManagerFactory) {
             this.pkcs11KeyStore = pkcs11KeyStore;
             this.keyManagerFactory = keyManagerFactory;
         }
@@ -117,16 +117,21 @@ public class RsaPkcs11KeyProvider extends AnchorPane implements TabKeyProvider, 
             throw new RuntimeException("PKCS#11 store not loaded");
         }
 
-        if (currentContext != null && currentContext.sameContext(pkcs11KeyStore)) {
-            return currentContext.keyManagerFactory;
-        } else {
-            try {
-                KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-                keyManagerFactory.init(pkcs11KeyStore, null);
-                currentContext = new Pkcs11KeyContext(pkcs11KeyStore, keyManagerFactory);
-                return keyManagerFactory;
-            } catch (NoSuchAlgorithmException | UnrecoverableKeyException | KeyStoreException e) {
-                throw new RuntimeException(e);
+        while (true) {
+            Pkcs11KeyManager keyManager = currentKeyManager.get();
+            if (keyManager != null && keyManager.sameContext(pkcs11KeyStore)) {
+                return keyManager.keyManagerFactory;
+            } else {
+                try {
+                    KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+                    keyManagerFactory.init(pkcs11KeyStore, null);
+                    Pkcs11KeyManager newKeyManager = new Pkcs11KeyManager(pkcs11KeyStore, keyManagerFactory);
+                    if (currentKeyManager.compareAndSet(keyManager, newKeyManager)) {
+                        return keyManagerFactory;
+                    }
+                } catch (NoSuchAlgorithmException | UnrecoverableKeyException | KeyStoreException e) {
+                    throw new RuntimeException(e);
+                }
             }
         }
     }

@@ -29,6 +29,7 @@ import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.security.spec.InvalidKeySpecException;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.prefs.Preferences;
 
 import static com.flower.crypt.keys.UserPreferencesManager.getUserPreference;
@@ -49,14 +50,13 @@ public class RsaFileKeyProvider extends AnchorPane implements TabKeyProvider, Rs
 
     protected final Stage mainStage;
 
-    //TODO: access intentionally not safe
-    @Nullable FileKeyContext currentContext = null;
-    static final class FileKeyContext {
+    final AtomicReference<FileKeyManager> currentKeyManager = new AtomicReference<>(null);
+    static final class FileKeyManager {
         final Certificate fileCertificate;
         final PrivateKey fileKey;
         final KeyManagerFactory keyManagerFactory;
 
-        FileKeyContext(Certificate fileCertificate, PrivateKey fileKey, KeyManagerFactory keyManagerFactory) {
+        FileKeyManager(Certificate fileCertificate, PrivateKey fileKey, KeyManagerFactory keyManagerFactory) {
             this.fileCertificate = fileCertificate;
             this.fileKey = fileKey;
             this.keyManagerFactory = keyManagerFactory;
@@ -211,12 +211,18 @@ public class RsaFileKeyProvider extends AnchorPane implements TabKeyProvider, Rs
             if (fileKey == null) {
                 throw new RuntimeException("Key not loaded");
             }
-            if (currentContext != null && currentContext.sameContext(fileCertificate, fileKey)) {
-                return currentContext.keyManagerFactory;
-            } else {
-                KeyManagerFactory keyManagerFactory = PkiUtil.getKeyManagerFromCertAndPrivateKey((X509Certificate)fileCertificate, fileKey);
-                currentContext = new FileKeyContext(fileCertificate, fileKey, keyManagerFactory);
-                return keyManagerFactory;
+
+            while (true) {
+                FileKeyManager keyManager = currentKeyManager.get();
+                if (keyManager != null && keyManager.sameContext(fileCertificate, fileKey)) {
+                    return keyManager.keyManagerFactory;
+                } else {
+                    KeyManagerFactory keyManagerFactory = PkiUtil.getKeyManagerFromCertAndPrivateKey((X509Certificate)fileCertificate, fileKey);
+                    FileKeyManager newKeyManager = new FileKeyManager(fileCertificate, fileKey, keyManagerFactory);
+                    if (currentKeyManager.compareAndSet(keyManager, newKeyManager)) {
+                        return keyManagerFactory;
+                    }
+                }
             }
         } catch (Exception e) {
             throw new RuntimeException(e);
