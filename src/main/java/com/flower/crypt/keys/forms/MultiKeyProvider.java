@@ -51,6 +51,10 @@ public class MultiKeyProvider extends AnchorPane implements TabKeyProvider, RsaK
         checkNotNull(childProvidersTabPane).getSelectionModel().select(0);
     }
 
+    public TabPane getChildProvidersTabPane() {
+        return checkNotNull(childProvidersTabPane);
+    }
+
     public Tab addTab(TabKeyProvider tabKeyProvider) {
         String tabName = tabKeyProvider.tabName();
         AnchorPane tabContent = tabKeyProvider.tabContent();
