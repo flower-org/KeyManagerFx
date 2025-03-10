@@ -21,9 +21,9 @@
                 <RowConstraints maxHeight="30.0" minHeight="30.0" prefHeight="30.0" vgrow="SOMETIMES" />
             </rowConstraints>
             <children>
-                <Label text="Key (Base64)" />
+                <Label text="Key (hex)" />
                 <TextField fx:id="aes256KeyTextField" GridPane.columnIndex="1" />
-                <CheckBox fx:id="aes256IvCheckBox" mnemonicParsing="false" text="IV (Base 64)" GridPane.rowIndex="1" />
+                <CheckBox fx:id="aes256IvCheckBox" mnemonicParsing="false" text="IV (hex)" GridPane.rowIndex="1" />
                 <TextField fx:id="aes256IvTextField" GridPane.columnIndex="1" GridPane.rowIndex="1" />
             </children>
         </GridPane>

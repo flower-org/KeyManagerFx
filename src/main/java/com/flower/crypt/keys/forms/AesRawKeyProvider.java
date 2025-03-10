@@ -1,5 +1,6 @@
 package com.flower.crypt.keys.forms;
 
+import com.flower.crypt.HexTool;
 import com.flower.crypt.keys.Aes256KeyContext;
 import com.flower.crypt.keys.KeyContext;
 import javafx.beans.value.ObservableValue;
@@ -14,7 +15,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
-import java.util.Base64;
 import java.util.prefs.Preferences;
 
 import static com.flower.crypt.keys.UserPreferencesManager.getUserPreference;
@@ -57,12 +57,12 @@ public class AesRawKeyProvider extends AnchorPane implements TabKeyProvider {
     @Override
     public KeyContext getKeyContext() {
         String aes256Base64Key = checkNotNull(aes256KeyTextField).textProperty().get();
-        byte[] aes256Key = Base64.getDecoder().decode(aes256Base64Key);
+        byte[] aes256Key = HexTool.hexStringToByteArray(aes256Base64Key);
 
         byte[] aes256Iv = null;
         if (checkNotNull(aes256IvCheckBox).selectedProperty().get()) {
             String aes256Base64Iv = checkNotNull(aes256IvTextField).textProperty().get();
-            aes256Iv = Base64.getDecoder().decode(aes256Base64Iv);
+            aes256Iv = HexTool.hexStringToByteArray(aes256Base64Iv);
         }
         return Aes256KeyContext.of(aes256Key, aes256Iv);
     }
